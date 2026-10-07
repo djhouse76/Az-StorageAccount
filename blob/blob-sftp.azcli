@@ -1,0 +1,36 @@
+# Azure Blob Storage SFTP patterns
+
+# Prerequisites
+# - A standard general-purpose v2 or premium block blob storage account
+# - Storage account feature registration for SFTP
+# - The hierarchical namespace feature enabled on the storage account
+# - Networking that allows outbound SSH traffic on port 22
+
+# Check whether the SFTP feature is registered on your subscription.
+az feature show --namespace Microsoft.Storage --name AllowSFTP
+
+# Register the SFTP feature on your subscription.
+az feature register --namespace Microsoft.Storage --name AllowSFTP
+
+# Review SFTP feature status.
+az feature list -o table --query "[?contains(name, 'Microsoft.Storage/AllowSFTP')].{Name:name,State:properties.state}"
+
+# Validate a storage account before enabling or using SFTP.
+az storage account hns-migration start --type validation -n <storage-account> -g <resource-group>
+
+# Authenticate to Azure CLI before running these administration commands: use
+# az login --use-device-code locally, az login --identity on Azure, or federation in CI.
+# Azure CLI authentication is separate from the SFTP local user's credentials.
+
+# Example SFTP endpoint format.
+sftp <storage-account>.<container>.<local-user>@<storage-account>.blob.core.windows.net
+
+# Example SFTP connection with a generated username / password pattern from your environment.
+# sftp <storage-account>.blob1.user1@<storage-account>.blob.core.windows.net
+
+# If you are using a lease-based workflow, acquire and release a blob container lease.
+leaseId=$(az storage container lease acquire -c <container-name> --account-name <storage-account> --auth-mode login)
+az storage container lease release --lease-id $leaseId -c <container-name> --account-name <storage-account> --auth-mode login
+
+# Release a lease by explicit lease ID.
+az storage container lease release -c <container-name> --lease-id "<lease-id>" --account-name <storage-account> --auth-mode login

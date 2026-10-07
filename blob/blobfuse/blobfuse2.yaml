@@ -1,0 +1,93 @@
+# Logger configuration
+# General practice: type: syslog — output routes to journald/Azure Monitor, no file management required
+# DEV exception:    type: base   — writes to file-path below, easy to tail and inspect locally
+#
+# Levels (least to most verbose): log_off | log_crit | log_err | log_warning | log_info | log_trace | log_debug
+#   PROD: log_warning — only warnings/errors
+#   DEV:  log_debug   — verbose; log_trace/log_debug generate significant volume, avoid in PROD
+#
+# file-path: ONLY applies when type: base — ignored entirely when type: syslog
+logging:
+  type: base                                        # standard: syslog | DEV only: base
+  level: log_debug                                  # standard: log_warning | DEV: log_debug
+  file-path: /home/<user>/.blobfuse2/blobfuse2.log  # only used when type: base — remove or ignore for syslog
+
+components:
+  - libfuse
+  - block_cache
+  - attr_cache
+  - azstorage
+
+
+libfuse:
+  # allow-other: permits users other than the mounting user to access the filesystem
+  # Requires user_allow_other to be uncommented in /etc/fuse.conf:
+  #   sudo sed -i 's/^#user_allow_other/user_allow_other/' /etc/fuse.conf
+  # If that OS-level setting is not in place (or policy forbids it), omit allow-other (defaults to false)
+  # and instead mount as root (sudo) so all processes inherit root's access to the mount point.
+  allow-other: true
+  # DEV:  30s — faster freshness, easier to observe changes during testing
+  # PROD: 120s — reduces Azure Storage metadata API calls under load
+  attribute-expiration-sec: 30
+  entry-expiration-sec: 30
+  negative-entry-expiration-sec: 30
+
+block_cache:
+  # DEV:       mem-size-mb: 512,   prefetch: 12, parallelism: 4  — minimal RAM, sufficient for spike/testing
+  #
+  # PROD-LOW:  mem-size-mb: 4096,  prefetch: 16, parallelism: 8  — 4 GB cache, light workload, few concurrent reads, <5 GB/hr throughput
+  #            symptoms to increase: I/O wait >10%, read stalls, cache miss warnings in logs
+  #
+  # PROD-MED:  mem-size-mb: 8192,  prefetch: 24, parallelism: 16 — 8 GB cache, moderate workload, mixed read patterns, 5-20 GB/hr throughput
+  #            symptoms to increase: sustained I/O wait, prefetch exhaustion; decrease if swap appears or OOM kills
+  #
+  # PROD-HIGH: mem-size-mb: 14336, prefetch: 40, parallelism: 48 — 14 GB cache, heavy sequential streaming, >20 GB/hr throughput
+  #            symptoms to decrease: available RAM <4 GB under load, swap in use, other services degrading
+  #
+  # block-size-mb:
+  #   DEV:  16 MB — standard default, good for testing any file size
+  #   PROD: 16 MB — suitable for most workloads (files 100 MB+)
+  #         increase to 32 MB if processing very large files (>1 GB) sequentially for better throughput
+  #         decrease to 8 MB if processing many small files (<16 MB) to avoid over-fetching
+  block-size-mb: 16
+  mem-size-mb: 512
+  prefetch: 12
+  parallelism: 4
+
+attr_cache:
+  # DEV:  30s — matches libfuse expiry, consistent freshness for testing
+  # PROD: 120s — reduces repeated attribute lookups, aligns with libfuse PROD setting
+  timeout-sec: 30
+
+# Azure Storage connection configuration
+# type:         block  = Azure Blob Storage (standard)
+#               adls   = Azure Data Lake Storage Gen2 (hierarchical namespace, use for analytics workloads)
+# account-name: storage account name only, no domain suffix
+# container:    blob container to mount as the root of the filesystem
+# endpoint:     full blob service URL — omit trailing slash
+# mode:         key    = storage account key (simple, not recommended for prod)
+#               sas    = shared access signature token (time-limited, least privilege)
+#               spn    = service principal (app registration with client secret)
+#               msi    = managed identity (Azure VM/AKS — no credentials needed, preferred for prod)
+#               azcli  = current 'az login' session (dev/local only — token expires after 90 days inactivity)
+azstorage:
+  type: block                                               # block = Blob Storage | adls = Data Lake Gen2
+  account-name: <storage-account-name>                     # storage account name (no .blob.core.windows.net suffix)
+  container: <container-name>                               # blob container to mount as filesystem root
+  endpoint: https://<storage-account-name>.blob.core.windows.net  # blob service endpoint, no trailing slash
+  mode: azcli                                              # local dev: azcli | Azure VM: msi | prod automated: spn or sas
+  # Credentials required per mode (uncomment the relevant block):
+  #
+  # mode: key
+  #   account-key: <storage-account-key>
+  #
+  # mode: sas
+  #   sas: <sas-token>                                     # starts with '?sv=...' — omit the leading '?'
+  #
+  # mode: msi
+  #   appid: <managed-identity-client-id>                  # optional: only needed for user-assigned identity
+  #                                                        # omit entirely for system-assigned identity
+  # mode: spn
+  #   tenantid: <azure-tenant-id>
+  #   clientid: <service-principal-client-id>
+  #   clientsecret: <service-principal-client-secret>

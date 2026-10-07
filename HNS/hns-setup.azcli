@@ -1,0 +1,6 @@
+
+# Start HNS migration validation for the specified storage account
+az storage account hns-migration start --type validation --name $storageName --resource-group $RG --subscription $subscription
+
+# Start HNS migration upgrade for the specified storage account
+az storage account hns-migration start --type upgrade --name $storageName --resource-group $RG --subscription $subscription

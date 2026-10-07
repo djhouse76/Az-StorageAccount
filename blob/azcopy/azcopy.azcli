@@ -1,0 +1,66 @@
+# Azure Blob Storage AzCopy patterns
+# Preferred order for modern usage:
+# 1) Managed identity (best in Azure)
+# 2) Service principal (for automation)
+# 3) SAS token (for short-lived, scoped transfers)
+
+# Download and install AzCopy on Linux.
+# On Azure-hosted Linux, prefer the package-managed install if your environment already provides it.
+wget https://aka.ms/downloadazcopy-v10-linux
+tar -xvf downloadazcopy-v10-linux
+sudo rm -f /usr/bin/azcopy
+sudo cp ./azcopy_linux_amd64_*/azcopy /usr/bin/
+
+# Use managed identity when running inside Azure.
+azcopy login --identity --identity-client-id "<managed-identity-client-id>"
+
+# Use service principal for automation or external runners.
+az ad sp create-for-rbac \
+ --name "<service-principal-name>" \
+ --role "Storage Blob Data Contributor" \
+ --scopes "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Storage/storageAccounts/<storage-account>"
+
+# Grant Reader on the storage account if you need metadata access from the service principal.
+az role assignment create \
+ --assignee "<service-principal-app-id>" \
+ --role "Reader" \
+ --scope "/subscriptions/<subscription-id>/resourceGroups/<resource-group>/providers/Microsoft.Storage/storageAccounts/<storage-account>"
+
+# Login with the service principal. Keep the client secret in a secret store or environment variable.
+export AZCOPY_SPA_CLIENT_SECRET="<client-secret>"
+azcopy login \
+ --service-principal \
+ --application-id "<service-principal-app-id>" \
+ --tenant-id "<tenant-id>"
+
+# Upload a file to a blob container with the current Azure identity.
+azcopy copy "/path/to/file.txt" "https://<storage-account>.blob.core.windows.net/<container>/<path/to/blob>"
+
+# Upload a file using a short-lived SAS token.
+azcopy copy "/path/to/file.txt" "https://<storage-account>.blob.core.windows.net/<container>/<path/to/blob>?<sas-token>"
+
+# Copy a directory recursively.
+azcopy copy "/path/to/local/folder" "https://<storage-account>.blob.core.windows.net/<container>/<destination-path>/" --recursive
+
+# List blob content and selected properties.
+azcopy list "https://<storage-account>.blob.core.windows.net/<container>" \
+ --properties "LastModifiedTime;VersionId;BlobType;BlobAccessTier;ContentType;ContentEncoding;LeaseState;LeaseDuration;LeaseStatus"
+
+# Copy blob content between containers.
+# Source and destination URLs can use SAS tokens or a logged-in identity.
+azcopy copy "https://<source-account>.blob.core.windows.net/<source-container>/<source-prefix>/" "https://<destination-account>.blob.core.windows.net/<destination-container>/<destination-prefix>/" --recursive
+
+# Copy from a SAS-token source to a SAS-token destination.
+azcopy copy "https://<source-account>.blob.core.windows.net/<source-container>/<source-prefix>?<source-sas-token>" "https://<destination-account>.blob.core.windows.net/<destination-container>/<destination-prefix>?<destination-sas-token>" --recursive
+
+# Copy with progress logging.
+azcopy copy "https://<source-account>.blob.core.windows.net/<source-container>/<source-prefix>/" "https://<destination-account>.blob.core.windows.net/<destination-container>/<destination-prefix>/" --recursive --log-level INFO
+
+# Check transfer status.
+azcopy jobs list
+
+# Resume a failed or interrupted transfer.
+azcopy jobs resume <JobID>
+
+# Show detailed transfer metadata.
+azcopy jobs show <JobID>

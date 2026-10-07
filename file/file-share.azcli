@@ -1,0 +1,56 @@
+# Azure Files CLI and AzCopy patterns
+
+# Create a storage account for Azure Files.
+az storage account create \
+ --name <storage-account> \
+ --resource-group <resource-group> \
+ --location <azure-region> \
+ --sku Standard_LRS \
+ --kind StorageV2
+
+# Create a file share using Azure AD login where supported by your environment.
+az storage share-rm create \
+ --resource-group <resource-group> \
+ --storage-account <storage-account> \
+ --name <share-name> \
+ --quota <quota-gib>
+
+# Create a directory in a file share.
+az storage directory create \
+ --account-name <storage-account> \
+ --share-name <share-name> \
+ --name <directory-path> \
+ --auth-mode login
+
+# Upload a file to a file share.
+az storage file upload \
+ --account-name <storage-account> \
+ --share-name <share-name> \
+ --source "/path/to/file.txt" \
+ --path "<directory-path>/file.txt" \
+ --auth-mode login
+
+# List files in a directory.
+az storage file list \
+ --account-name <storage-account> \
+ --share-name <share-name> \
+ --path <directory-path> \
+ --auth-mode login \
+ -o table
+
+# Download a file from a file share.
+az storage file download \
+ --account-name <storage-account> \
+ --share-name <share-name> \
+ --path "<directory-path>/file.txt" \
+ --dest "/path/to/download/file.txt" \
+ --auth-mode login
+
+# Copy a local directory to an Azure file share using a SAS token.
+azcopy copy "/path/to/local/directory" "https://<storage-account>.file.core.windows.net/<share-name>/<directory-path>?<sas-token>" --recursive
+
+# Sync a local directory to an Azure file share using a SAS token.
+azcopy sync "/path/to/local/directory" "https://<storage-account>.file.core.windows.net/<share-name>/<directory-path>?<sas-token>" --recursive
+
+# List content in an Azure file share using a SAS token.
+azcopy list "https://<storage-account>.file.core.windows.net/<share-name>/<directory-path>?<sas-token>"

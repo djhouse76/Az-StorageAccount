@@ -1,0 +1,33 @@
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and runtime output
+*.log
+*.tmp
+*.swp
+
+# Blobfuse local state and cache
+.blobfuse2/
+blobfuse2-cache/
+blobfuse2-mount/
+
+# Azure CLI and local tool state
+.azure/
+.azure-dev/
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Test and build artifacts
+coverage/
+dist/
+build/
+
+work/**

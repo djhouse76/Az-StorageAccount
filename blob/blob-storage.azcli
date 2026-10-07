@@ -1,0 +1,90 @@
+# Azure Blob Storage CLI patterns
+
+# Before running any command, load your environment parameter file.
+# Example: . ./work/<environment>/<storage-account>.ps1
+# Required variables: $subscription, $RG, $storageName, etc
+# Set operation-specific variables as needed: $containerName, $blobName, $sourcePath,
+# $destinationPath, $directoryName, and $pathPrefix.
+
+# Authenticate before running these commands: use az login --use-device-code locally,
+# az login --identity on Azure, or workload identity federation in CI.
+# The signed-in identity needs the appropriate Azure RBAC blob data role.
+
+# List storage accounts.
+az storage account list `
+	--subscription $subscription `
+	--output table
+
+# Check whether Blob soft delete is enabled for the storage account.
+az storage account blob-service-properties show `
+	--account-name $storageName `
+	--resource-group $RG `
+	--subscription $subscription `
+	--query "{softDeleteEnabled:deleteRetentionPolicy.enabled, softDeleteDays:deleteRetentionPolicy.days}" `
+	--output json
+
+# Check whether the storage account is geo-redundant (GRS/GZRS/RA-GRS etc.).
+az storage account show `
+	--name $storageName `
+	--resource-group $RG `
+	--subscription $subscription `
+	--query "properties.accountReplicationType" `
+	--output tsv
+
+# List blobs in a container.
+az storage blob list `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--auth-mode login
+
+# Upload a single blob.
+az storage blob upload `
+	--name $blobName `
+	--file $sourcePath `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--overwrite true `
+	--auth-mode login
+
+# Upload an entire directory to a blob container path.
+az storage blob directory upload `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--source $sourcePath `
+	--destination-path $destinationPath `
+	--auth-mode login `
+	--recursive
+
+# Create a blob directory prefix if needed.
+az storage blob directory create `
+	--container-name $containerName `
+	--name $directoryName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--auth-mode login
+
+# List blobs in a nested path.
+az storage blob list `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--prefix $pathPrefix `
+	--auth-mode login
+
+# Acquire and release a container lease if required for coordination.
+$leaseId = az storage container lease acquire `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--auth-mode login
+az storage container lease release `
+	--lease-id $leaseId `
+	--container-name $containerName `
+	--account-name $storageName `
+	--subscription $subscription `
+	--auth-mode login
+
+# For SFTP-specific Blob Storage examples, use the dedicated blob-sftp.azcli file.
